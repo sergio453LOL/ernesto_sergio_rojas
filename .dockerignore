@@ -1,0 +1,7 @@
+target/
+autotests/
+.git/
+.idea/
+.vscode/
+.env
+*.iml

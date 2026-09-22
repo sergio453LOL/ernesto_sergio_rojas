@@ -1,0 +1,56 @@
+# Tuckersoft Branch Engine
+#
+#   docker compose up -d                        -> solo PostgreSQL (lo normal)
+#   docker compose --profile full up -d --build -> PostgreSQL + la aplicacion
+#   docker compose down                         -> apaga todo
+#   docker compose down -v                      -> ademas borra los datos
+#
+# Los valores salen del .env de la raiz, que NO se commitea. Sin ese archivo
+# compose no sabe la contrasena de la base y avisa con una advertencia.
+#
+# OJO al correr los autotests con el perfil "full": su servidor SMTP de pruebas
+# escucha en el 127.0.0.1 de tu maquina, y desde dentro de un contenedor ese
+# 127.0.0.1 es el contenedor mismo. Para que la estrella 5 pase, corre la
+# aplicacion en tu maquina (./mvnw spring-boot:run) y deja en Docker solo la
+# base de datos.
+
+services:
+  db:
+    image: postgres:16
+    container_name: bandersnatch-db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - bandersnatch-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    container_name: branch-engine
+    profiles:
+      - full
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Dentro de la red de compose la base se llama "db", no localhost.
+      DB_HOST: db
+      # Y el correo sale hacia la maquina que hospeda a Docker.
+      MAIL_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+
+volumes:
+  bandersnatch-data:
